@@ -210,7 +210,6 @@ def objective(trial, X, y, df, features_names):
 
 
 def main():
-
     # get data:
     df = pd.read_csv('clean1.csv', low_memory=False)
 
@@ -224,8 +223,8 @@ def main():
     # treat missing values:
     df = treat_mis_value_obj(df)
     df = treat_mis_value_nu(df)
-    print(df.shape)
 
+    # in survival analyses, target consist of event indicator δ∈{0;1} and the observable survival time y>0.
     y = Surv.from_arrays(df.event, df.PTIME)
 
     df = df.drop(['PX_STAT', 'PTIME', 'event'], axis=1)
@@ -241,7 +240,7 @@ def main():
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.20, random_state=20, stratify=y["event"], shuffle=True)
 
-    X_test = X_test[y_test['time'] < y_train['time'].max(), :]
+    X_test = X_test[y_test['time'] < y_train['time'].max(), :]  # necessary for cumulative_dynamic_auc
     y_test = y_test[y_test['time'] < y_train['time'].max()]
 
     # Applying Transformer
@@ -249,10 +248,9 @@ def main():
     X_train = sc.fit_transform(X_train)
     X_test = sc.transform(X_test)
 
-    # find_best_features(X_train, y_train, df.columns, 'to_remove_2018-today-today.txt')
+    find_best_features(X_train, y_train, df.columns, 'best_features_2018.txt')
 
-    print(X_train.shape)
-
+    # For hyperparameter optimization, I use Optuna framework
     study = optuna.create_study(direction="maximize")
     func = lambda trial: objective(trial, X_train, y_train, df, df.columns)
 
@@ -261,29 +259,33 @@ def main():
 
     print("Best params:")
 
-    # for key, value in study.best_params.items():
-    #     print(f"\t{key}: {value}")
+    for key, value in study.best_params.items():
+        print(f"\t{key}: {value}")
 
+    # after we found the best combination of hyper parameters, we train the model and test it.
+
+    # take a subset of features, take just k best features. Optuna found k
     best_cols = get_k_best('to_remove_10.2018.txt', study.best_params['num_of_features'], df.columns)
-    # best_cols = get_k_best('to_remove_10.2018.txt', 140, df.columns)
-    # print(best_cols)
     index_no = [df.columns.get_loc(c) for c in best_cols if c in df]
     X_train = X_train[:, index_no]
     X_test = X_test[:, index_no]
+
     X_train, y_train = remove_outliers(X_train, y_train)
 
+    # create and train model with the hyper parameters we found previously
     est_cph_tree = GradientBoostingSurvivalAnalysis(n_estimators=study.best_params['n_estimators'],
                                                     max_depth=study.best_params['max_depth'],
                                                     learning_rate=study.best_params['learning_rate'],
                                                     subsample=study.best_params['subsample'])
-    # est_cph_tree = GradientBoostingSurvivalAnalysis(n_estimators=900, learning_rate=0.0016543559723740892, max_depth=5,
-    #                                                 subsample=0.7)
-    monitor = make_monitor(10)
+
+    monitor = make_monitor(10) # usage of early stopping monitor.
+
     est_cph_tree.fit(X_train, y_train, monitor=monitor)
-    # show_importances(est_cph_tree,df)
 
+    # calculate cumulative hazard function for range of dates. The associated cumulative/dynamic AUC quantifies how
+    # well a model can distinguish subjects who fail by a given time (ti≤t) from subjects who fail after this time (
+    # ti>t). we are interested in t = 365 days
     va_times = np.arange(y_test['time'].min(), y_test['time'].max(), 7)
-
     rsf_chf_funcs = est_cph_tree.predict_cumulative_hazard_function(
         X_test)
 
