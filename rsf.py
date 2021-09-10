@@ -22,7 +22,7 @@ def clean_data(new_df):
 
     new_df = new_df[new_df['TX_DATE'].notnull()]
 
-    # remove irrelevant cols:
+    # remove irrelevant cols
     cols_to_drop = 'inutero pt_code wl_id_code trr_id_code donor_id perfused_prior perfusion_location perfused_by ' \
                    'total_perfusion_time lu_received lu2_received pretitera pretitera_date pretiterb pretiterb_date ' \
                    'txhrt txint txkid txliv txlng txpan txvca tx_procedur_ty status_tcr prvtxdif retxdate trtrej1y ' \
