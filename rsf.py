@@ -22,7 +22,7 @@ def clean_data(new_df):
 
     new_df = new_df[new_df['TX_DATE'].notnull()]
 
-    # remove irrelevant cols
+    # remove irrelevant cols for predicting:
     cols_to_drop = 'inutero pt_code wl_id_code trr_id_code donor_id perfused_prior perfusion_location perfused_by ' \
                    'total_perfusion_time lu_received lu2_received pretitera pretitera_date pretiterb pretiterb_date ' \
                    'txhrt txint txkid txliv txlng txpan txvca tx_procedur_ty status_tcr prvtxdif retxdate trtrej1y ' \
@@ -30,11 +30,12 @@ def clean_data(new_df):
                    'calc_las_listdate tcr_cdc_growth_bmi tcr_cdc_growth_hgt tcr_cdc_growth_wgt init_priority ' \
                    'end_priority  titera titera_date titerb titerb_date '
 
+    # remove measures that made after the transplantation:
     measured_after = ' cod cod_ostxt cod2 cod2_ostxt cod3 cod3_ostxt gstatus gtime lastfuno pstatus func_stat_trf'
 
     cols_to_drop_list = (cols_to_drop + measured_after).upper().split()
 
-    # remove features measured after surgery
+    # remove features related to the success:
     cols_to_drop_list += ['NUM_PREV_TX', 'COMPOSITE_DEATH_DATE', 'SSDMF_DEATH_DATE', 'PX_STAT_DATE', 'LOS',
                           'PST_DIAL', 'GRF_STAT',
                           'GRF_FAIL_DATE', 'GRF_FAIL_CAUSE', 'DISCHARGE_DATE', 'INIT_DATE', 'END_STAT', 'PST_STROKE',
@@ -165,9 +166,6 @@ def objective(trial, X, y, df, features_names):
         "learning_rate": trial.suggest_float("learning_rate", 1e-4, 0.3, log=True),
         "max_depth": trial.suggest_int("max_depth", 3, 9),
         "subsample": trial.suggest_float("subsample", 0.5, 0.9, step=0.1),
-        # "max_features": trial.suggest_categorical(
-        #     "max_features", ["auto", "sqrt", "log2"]
-        # ),
         "random_state": 1121218,
         "num_of_features": trial.suggest_int("num_of_features", 100, 250, step=10)
     }
@@ -220,7 +218,7 @@ def main():
     df = df[(df['TX_DATE'] > '2018-10-01')]  # & (df['TX_DATE'] < '2017-10-01')]
     df = clean_data(df)
 
-    # in survival anlasys, we define for each person if it right censo
+    # in survival analyses, we define for each person if it right censored or not.
     df['event'] = np.where(df['PX_STAT'] == 'D', True, False)
 
     # treat missing values:
